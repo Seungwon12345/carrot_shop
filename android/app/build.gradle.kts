@@ -38,8 +38,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        // ❌ 네이버 로그인 관련 manifestPlaceholders 제거
-        // Manifest에서는 @string/client_id 방식으로 불러오기 때문에 필요 없음
+        // ❌ 네이버 로그인 관련 manifestPlaceholders 제거*       // Manifest에서는 @string/client_id 방식으로 불러오기 때문에 필요 없음
     }
 
     buildTypes {
