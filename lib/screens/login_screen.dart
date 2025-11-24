@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../constants/colors.dart';
 import '../services/auth_service.dart';
-import '../widgets/custom_button.dart';
-import 'home_screen.dart';
-import 'signup_screen.dart'; // 회원가입 화면 import
+import '../models/user_model.dart';
+import 'location_screen.dart';
+import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -13,17 +13,48 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _isLoading = false;
 
-  // 공통 로그인 핸들러
-  Future<void> _handleLogin(Future<AuthResult> Function() loginMethod) async {
+  // 이메일 로그인
+  Future<void> _handleEmailLogin() async {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('이메일과 비밀번호를 입력해주세요')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    final result = await AuthService.loginWithEmail(
+      _emailController.text.trim(),
+      _passwordController.text,
+    );
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+      if (result.isSuccess && result.user != null) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const LocationScreen()),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message ?? '로그인 실패')),
+        );
+      }
+    }
+  }
+
+  // 소셜 로그인
+  Future<void> _handleSocialLogin(Future<AuthResult> Function() loginMethod) async {
     setState(() => _isLoading = true);
     final result = await loginMethod();
     if (mounted) {
       setState(() => _isLoading = false);
       if (result.isSuccess && result.user != null) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => HomeScreen(user: result.user!)),
+          MaterialPageRoute(builder: (context) => const LocationScreen()),
         );
       } else if (!result.isCancelled) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -34,75 +65,216 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Spacer(flex: 2),
-              // 로고 영역 (기존 코드와 동일)
-              Container(
-                width: 80, height: 80,
-                decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(20)),
-                child: const Icon(Icons.shopping_bag_outlined, size: 40, color: Colors.white),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black),
+        title: null,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Text(
+              '천안마켓과 함께하는',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.normal, color: Colors.black),
+            ),
+            const Text(
+              '안전한 중고거래',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '우리 동네에서 따뜻한 거래를 시작해보세요',
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+            const SizedBox(height: 40),
+
+            // 이메일 입력
+            const Text('이메일', style: TextStyle(fontSize: 14, color: Colors.black87)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _emailController,
+              decoration: const InputDecoration(
+                hintText: '이메일 입력',
+                border: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.grey),
+                ),
+                contentPadding: EdgeInsets.symmetric(vertical: 15, horizontal: 10),
               ),
-              const SizedBox(height: 16),
-              const Text('당근마켓', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primary)),
+              keyboardType: TextInputType.emailAddress,
+              enabled: !_isLoading,
+            ),
+            const SizedBox(height: 20),
 
-              const Spacer(flex: 2),
-
-              // 1. 네이버 로그인
-              CustomButton(
-                onPressed: () => _handleLogin(AuthService.naverLogin),
-                text: '네이버로 시작하기',
-                backgroundColor: const Color(0xFF03C75A),
-                isLoading: _isLoading,
-                icon: const Text('N', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            // 비밀번호 입력
+            const Text('비밀번호', style: TextStyle(fontSize: 14, color: Colors.black87)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                hintText: '비밀번호 입력',
+                border: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.grey),
+                ),
+                contentPadding: EdgeInsets.symmetric(vertical: 15, horizontal: 10),
               ),
-              const SizedBox(height: 12),
+              enabled: !_isLoading,
+              onSubmitted: (_) => _handleEmailLogin(),
+            ),
+            const SizedBox(height: 40),
 
-              // 2. 카카오 로그인
-              CustomButton(
-                onPressed: () => _handleLogin(AuthService.kakaoLogin),
-                text: '카카오로 시작하기',
-                backgroundColor: const Color(0xFFFEE500),
-                textColor: Colors.black87,
-                isLoading: _isLoading,
-                icon: const Icon(Icons.chat_bubble, color: Colors.black87, size: 20),
-              ),
-              const SizedBox(height: 12),
-
-              // 3. 구글 로그인
-              CustomButton(
-                onPressed: () => _handleLogin(AuthService.googleLogin),
-                text: 'Google로 시작하기',
-                backgroundColor: Colors.white,
-                textColor: Colors.black87,
-                borderColor: Colors.grey[300],
-                isLoading: _isLoading,
-                icon: const Icon(Icons.g_mobiledata, color: Colors.red, size: 28),
-              ),
-
-              const SizedBox(height: 24),
-
-              // 4. 이메일 회원가입 링크
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('계정이 없으신가요?'),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SignUpScreen()));
-                    },
-                    child: const Text('이메일로 가입하기'),
+            // 로그인 버튼
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _handleEmailLogin,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE3F2FD),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(5.0),
                   ),
-                ],
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    color: Colors.blue,
+                  ),
+                )
+                    : const Text(
+                  '로그인',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue,
+                  ),
+                ),
               ),
-              const Spacer(),
-            ],
+            ),
+            const SizedBox(height: 20),
+
+            // 회원가입 / 비밀번호 찾기
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const SignUpScreen()),
+                    );
+                  },
+                  child: const Text('회원가입', style: TextStyle(color: Colors.black54)),
+                ),
+                const Text('|', style: TextStyle(color: Colors.grey)),
+                TextButton(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('비밀번호 찾기 기능은 준비 중입니다')),
+                    );
+                  },
+                  child: const Text('비밀번호 찾기', style: TextStyle(color: Colors.black54)),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 30),
+
+            // 구분선
+            const Center(
+              child: Text(
+                '또는',
+                style: TextStyle(color: Colors.grey, fontSize: 14),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // 소셜 로그인 아이콘
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildSocialIcon(
+                  'assets/img/kakao_logo.png',
+                  const Color(0xFFFEE500),
+                      () => _handleSocialLogin(AuthService.kakaoLogin),
+                  padding: 8.0,
+                  fallbackIcon: Icons.chat_bubble,
+                  fallbackIconColor: Colors.black87,
+                ),
+                const SizedBox(width: 20),
+                _buildSocialIcon(
+                  'assets/img/naver_logo.png',
+                  Colors.white,
+                      () => _handleSocialLogin(AuthService.naverLogin),
+                  padding: 10.0,
+                  borderColor: Colors.grey.shade300,
+                  fallbackIcon: Icons.notifications,
+                  fallbackIconColor: const Color(0xFF03C75A),
+                ),
+                const SizedBox(width: 20),
+                _buildSocialIcon(
+                  'assets/img/google_logo.png',
+                  Colors.white,
+                      () => _handleSocialLogin(AuthService.googleLogin),
+                  borderColor: Colors.grey.shade300,
+                  padding: 8.0,
+                  fallbackIcon: Icons.g_mobiledata,
+                  fallbackIconColor: Colors.red,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 40),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSocialIcon(
+      String imagePath,
+      Color color,
+      VoidCallback onTap, {
+        Color? borderColor,
+        double padding = 8.0,
+        required IconData fallbackIcon,
+        required Color fallbackIconColor,
+      }) {
+    return GestureDetector(
+      onTap: _isLoading ? null : onTap,
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: borderColor != null ? Border.all(color: borderColor, width: 1) : null,
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(padding),
+          child: Image.asset(
+            imagePath,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              return Icon(fallbackIcon, color: fallbackIconColor, size: 24);
+            },
           ),
         ),
       ),
