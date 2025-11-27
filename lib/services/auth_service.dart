@@ -1,10 +1,11 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_naver_login/flutter_naver_login.dart'; // 👈 이 import가 핵심입니다
+import 'package:flutter_naver_login/flutter_naver_login.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao;
 import '../models/user_model.dart';
 import 'storage_service.dart';
+import 'firestore_service.dart';
 
 class AuthService {
   static final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
@@ -31,8 +32,11 @@ class AuthService {
         name: name,
         email: email,
         nickname: name,
-        profileImage: null,
+        profileImage: '',
       );
+
+      // Firestore에 저장
+      await FirestoreService.saveUserToFirestore(user);
 
       await _saveUserSession(user);
       return AuthResult.success(user: user);
@@ -56,13 +60,20 @@ class AuthService {
         password: password,
       );
 
-      final user = UserModel(
-        id: credential.user!.uid,
-        name: credential.user!.displayName ?? '사용자',
-        email: email,
-        nickname: credential.user!.displayName,
-        profileImage: null,
-      );
+      // Firestore에서 사용자 정보 가져오기
+      UserModel? user = await FirestoreService.getUserFromFirestore(credential.user!.uid);
+
+      // Firestore에 정보가 없으면 새로 생성
+      if (user == null) {
+        user = UserModel(
+          id: credential.user!.uid,
+          name: credential.user!.displayName ?? '사용자',
+          email: email,
+          nickname: credential.user!.displayName ?? '사용자',
+          profileImage: '',
+        );
+        await FirestoreService.saveUserToFirestore(user);
+      }
 
       await _saveUserSession(user);
       return AuthResult.success(user: user);
@@ -96,9 +107,12 @@ class AuthService {
         id: firebaseUser.uid,
         name: firebaseUser.displayName ?? 'Google User',
         email: firebaseUser.email ?? '',
-        nickname: firebaseUser.displayName,
-        profileImage: firebaseUser.photoURL,
+        nickname: firebaseUser.displayName ?? 'Google User',
+        profileImage: firebaseUser.photoURL ?? '',
       );
+
+      // Firestore에 저장
+      await FirestoreService.saveUserToFirestore(user);
 
       await _saveUserSession(user);
       return AuthResult.success(user: user);
@@ -129,12 +143,15 @@ class AuthService {
       kakao.User kakaoUser = await kakao.UserApi.instance.me();
 
       final user = UserModel(
-        id: kakaoUser.id.toString(),
+        id: 'kakao_${kakaoUser.id}',
         name: kakaoUser.kakaoAccount?.profile?.nickname ?? 'Kakao User',
         email: kakaoUser.kakaoAccount?.email ?? '',
-        nickname: kakaoUser.kakaoAccount?.profile?.nickname,
-        profileImage: kakaoUser.kakaoAccount?.profile?.profileImageUrl,
+        nickname: kakaoUser.kakaoAccount?.profile?.nickname ?? 'Kakao User',
+        profileImage: kakaoUser.kakaoAccount?.profile?.profileImageUrl ?? '',
       );
+
+      // Firestore에 저장
+      await FirestoreService.saveUserToFirestore(user);
 
       await _saveUserSession(user);
       return AuthResult.success(user: user);
@@ -148,32 +165,67 @@ class AuthService {
   }
 
   // ==========================================
-  // 5. 네이버 로그인
+  // 5. 네이버 로그인 (v2.1.1)
   // ==========================================
   static Future<AuthResult> naverLogin() async {
     try {
-      // FlutterNaverLogin 클래스가 인식이 안된다면 flutter pub get을 꼭 하세요.
-      final NaverLoginResult result = await FlutterNaverLogin.logIn();
+      print('🔵 네이버 로그인 시작');
 
-      if (result.status == NaverLoginStatus.loggedIn) {
-        final NaverAccountResult account = result.account;
+      // 먼저 기존 토큰 삭제
+      await FlutterNaverLogin.logOut();
+
+      final result = await FlutterNaverLogin.logIn();
+
+      print('🔵 로그인 결과 받음');
+      print('🔵 result.account: ${result.account}');
+      print('🔵 result.errorMessage: ${result.errorMessage}');
+
+      // account가 null이 아니면 로그인 성공
+      if (result.account != null) {
+        final account = result.account!;
+
+        print('✅ 네이버 로그인 성공');
+        print('   - ID: ${account.id}');
+        print('   - Name: ${account.name}');
+        print('   - Email: ${account.email}');
+        print('   - Nickname: ${account.nickname}');
+
         final user = UserModel(
-          id: account.id,
-          name: account.name,
-          email: account.email,
-          nickname: account.nickname,
-          profileImage: account.profileImage,
+          id: 'naver_${account.id}',
+          name: account.name ?? 'Naver User',
+          email: account.email ?? '',
+          nickname: account.nickname ?? 'Naver User',
+          profileImage: account.profileImage ?? '',
         );
+
+        print('🔵 Firestore 저장 시작');
+        // Firestore에 저장
+        await FirestoreService.saveUserToFirestore(user);
+        print('✅ Firestore 저장 완료');
 
         await _saveUserSession(user);
         return AuthResult.success(user: user);
-      } else if (result.status == NaverLoginStatus.cancelledByUser) {
-        return AuthResult.cancelled();
       } else {
-        return AuthResult.failure(message: result.errorMessage);
+        print('❌ 네이버 로그인 실패: account is null');
+        print('   errorMessage: ${result.errorMessage}');
+        // account가 null이면 취소 또는 실패
+        if (result.errorMessage != null &&
+            (result.errorMessage!.contains('cancel') ||
+                result.errorMessage!.contains('취소'))) {
+          return AuthResult.cancelled();
+        }
+        return AuthResult.failure(message: result.errorMessage ?? '네이버 로그인 실패');
       }
-    } catch (e) {
-      return AuthResult.failure(message: e.toString());
+    } on PlatformException catch (e) {
+      print('❌ PlatformException: ${e.code} - ${e.message}');
+      if (e.code == 'CANCELED' || e.code == 'USER_CANCEL') {
+        return AuthResult.cancelled();
+      }
+      return AuthResult.failure(message: '네이버 로그인 오류: ${e.message}');
+    } catch (e, stackTrace) {
+      print('❌ Exception: $e');
+      print('❌ StackTrace: $stackTrace');
+      return AuthResult.failure(message: '네이버 로그인 오류: $e');
     }
   }
 
