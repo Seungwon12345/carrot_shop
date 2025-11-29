@@ -9,6 +9,7 @@ class StorageService {
   static const String _keyAccessToken = 'access_token';
   static const String _keyRefreshToken = 'refresh_token';
   static const String _keyUserInfo = 'user_info';
+  static const String _keyLocation = 'user_location'; // 위치 정보 추가
 
   // 토큰 저장
   static Future<void> saveTokens({
@@ -44,6 +45,17 @@ class StorageService {
       return UserModel.fromJson(userMap);
     }
     return null;
+  }
+
+  // 위치 정보 저장
+  static Future<void> saveLocation(String location) async {
+    await _storage.write(key: _keyLocation, value: location);
+    print('✅ 위치 정보 저장: $location');
+  }
+
+  // 위치 정보 가져오기
+  static Future<String?> getLocation() async {
+    return await _storage.read(key: _keyLocation);
   }
 
   // 로그인 여부 확인

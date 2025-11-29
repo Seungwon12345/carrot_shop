@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
-import 'screens/start_screen.dart'; // splash_screen.dart 대신 start_screen.dart 사용
+import 'screens/start_screen.dart';
 import 'constants/colors.dart';
 import 'services/auth_service.dart';
 import 'firebase_options.dart';
+
+// [1] 추가: 알림 서비스 파일 임포트
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,11 +17,17 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // 2. 카카오 SDK 초기화 (네이티브 앱 키 입력)
+  // 2. 카카오 SDK 초기화
   KakaoSdk.init(nativeAppKey: '57c198cdb5784eb2f9645b9f0ef92c1d');
 
   // 3. 네이버 등 기타 서비스 초기화
   await AuthService.initializeSdk();
+
+  // -----------------------------------------------------------
+  // [2] 추가: 알림 기능 초기화 (앱 실행 시 필수!)
+  // -----------------------------------------------------------
+  await NotificationService().init();
+  // -----------------------------------------------------------
 
   runApp(const MyApp());
 }
@@ -42,7 +51,7 @@ class MyApp extends StatelessWidget {
           elevation: 0,
         ),
       ),
-      home: const StartScreen(), // SplashScreen 대신 StartScreen 사용
+      home: const StartScreen(),
     );
   }
 }

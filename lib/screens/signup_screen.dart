@@ -24,6 +24,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _isLoading = false;
 
   Future<void> _handleSignUp() async {
+    print('🔵 회원가입 시작');
+
     if (_phoneController.text.isEmpty) {
       _showError('휴대폰 번호를 입력해주세요');
       return;
@@ -55,20 +57,29 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
     setState(() => _isLoading = true);
 
+    print('🔵 AuthService.signUpWithEmail 호출');
     final result = await AuthService.signUpWithEmail(
       _emailController.text.trim(),
       _passwordController.text,
       _nicknameController.text.trim(),
     );
 
+    print('🔵 회원가입 결과: ${result.isSuccess}');
+    if (result.user != null) {
+      print('🔵 생성된 사용자 ID: ${result.user!.id}');
+      print('🔵 생성된 사용자 이메일: ${result.user!.email}');
+    }
+
     if (mounted) {
       setState(() => _isLoading = false);
 
       if (result.isSuccess && result.user != null) {
+        print('✅ 회원가입 성공 - LocationScreen으로 이동');
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const LocationScreen()),
         );
       } else {
+        print('❌ 회원가입 실패: ${result.message}');
         _showError(result.message ?? '회원가입 실패');
       }
     }
